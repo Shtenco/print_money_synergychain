@@ -1,0 +1,30 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.seed
+*.mnemonic
+
+# Python
+.venv/
+.venv-*/
+__pycache__/
+*.pyc
+
+# Foundry
+out/
+cache/
+broadcast/
+
+# Runtime state
+.synergy-l1/
+*.sqlite3
+anvil-state.json
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
