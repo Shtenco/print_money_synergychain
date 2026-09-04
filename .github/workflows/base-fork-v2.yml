@@ -5,6 +5,7 @@ on:
     branches: ["print_money_synergychain"]
     paths:
       - "analysis/base_fork_v2_optimizer.py"
+      - "analysis/base_fork_v2_throttled.py"
       - "test/BaseForkV2.t.sol"
       - "contracts/**"
       - "docs/BASE_FORK_V2.md"
@@ -34,16 +35,17 @@ jobs:
       V2_PRINCIPAL_USDC: "10000"
       V2_LOOKBACK_HOURS: "72"
       V2_ANCHORS: "2"
+      V2_RPC_DELAY: "0.85"
       V2_OUT_DIR: results
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install optimizer dependency
-        run: pip install "web3>=7,<8"
-      - name: Run archive-state causal grid
-        run: python analysis/base_fork_v2_optimizer.py
+      - name: Install optimizer dependencies
+        run: pip install "web3>=7,<8" "requests>=2.32,<3"
+      - name: Run throttled archive-state causal grid
+        run: python analysis/base_fork_v2_throttled.py
       - name: Upload Base-fork V2 results
         uses: actions/upload-artifact@v4
         with:
