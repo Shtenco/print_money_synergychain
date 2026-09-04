@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {BasePinnedPoolGradientAdapter} from "../contracts/economics/BasePinnedPoolGradientAdapter.sol";
 import {
     BaseQEExternalExecutor,
+    IBaseQEGradientAdapter,
     IBaseMessengerForQE
 } from "../contracts/economics/BaseQEExternalExecutor.sol";
 
@@ -105,7 +106,7 @@ contract BaseForkV2Test {
             address(this),
             IBaseMessengerForQE(address(messenger)),
             sinergyController,
-            adapter
+            IBaseQEGradientAdapter(address(adapter))
         );
         adapter.setExecutor(address(executor));
         _seedExecutor(executor);
