@@ -43,3 +43,18 @@ jobs:
               scheme.verify(public, msg, signature)
           print("PQ_PROVIDER_OK")
           PY
+
+  package:
+    needs: [solidity, pq-python]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build source archive
+        run: |
+          zip -r PRINT_MONEY_SYNERGYCHAIN_print_money_synergychain.zip . \
+            -x '.git/*' 'out/*' 'cache/*' '__pycache__/*' '*.pyc'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PRINT_MONEY_SYNERGYCHAIN_print_money_synergychain
+          path: PRINT_MONEY_SYNERGYCHAIN_print_money_synergychain.zip
+          if-no-files-found: error
