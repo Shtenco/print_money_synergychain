@@ -33,7 +33,7 @@ jobs:
       BASE_RPC_URL: https://mainnet.base.org
       V2_PRINCIPAL_USDC: "10000"
       V2_LOOKBACK_HOURS: "72"
-      V2_ANCHORS: "4"
+      V2_ANCHORS: "2"
       V2_OUT_DIR: results
     steps:
       - uses: actions/checkout@v4
