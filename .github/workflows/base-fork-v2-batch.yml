@@ -1,0 +1,40 @@
+name: Base Fork V2 Batch Sweep
+
+on:
+  push:
+    branches: ["print_money_synergychain"]
+    paths:
+      - "analysis/base_fork_v2_batch.py"
+      - ".github/workflows/base-fork-v2-batch.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  causal-batch:
+    runs-on: ubuntu-latest
+    env:
+      BASE_RPC_URL: https://mainnet.base.org
+      V2_PRINCIPAL_USDC: "10000"
+      V2_LOOKBACK_HOURS: "72"
+      V2_ANCHORS: "4"
+      V2_OUT_DIR: results_batch
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install "web3>=7,<8" "requests>=2.32,<3"
+      - name: Run batched archive-state causal grid
+        run: python analysis/base_fork_v2_batch.py
+      - name: Upload batched Base-fork V2 results
+        uses: actions/upload-artifact@v4
+        with:
+          name: BASE_FORK_V2_BATCH_RESULTS
+          path: |
+            results_batch/base_fork_v2_grid.csv
+            results_batch/base_fork_v2_summary.json
+            results_batch/BASE_FORK_V2_REPORT.md
+          if-no-files-found: error
