@@ -15,7 +15,7 @@ jobs:
   causal-batch:
     runs-on: ubuntu-latest
     env:
-      BASE_RPC_URL: https://mainnet.base.org
+      BASE_RPC_URL: https://base-rpc.publicnode.com
       V2_PRINCIPAL_USDC: "10000"
       V2_LOOKBACK_HOURS: "72"
       V2_ANCHORS: "4"
