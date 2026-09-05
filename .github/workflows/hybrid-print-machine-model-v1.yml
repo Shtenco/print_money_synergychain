@@ -15,6 +15,8 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12']
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,6 +24,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install pytest
         run: python -m pip install --upgrade pip pytest
+      - name: Import model from repo
+        run: python -c "from model.hybrid_print_machine import HybridPrintMachine; print(HybridPrintMachine.__name__)"
       - name: Compile model
         run: python -m py_compile model/hybrid_print_machine.py
       - name: Mint/revaluation invariant
