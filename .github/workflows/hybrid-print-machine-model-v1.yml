@@ -22,7 +22,21 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install pytest
         run: python -m pip install --upgrade pip pytest
-      - name: Run model tests
-        run: pytest -q tests/test_hybrid_print_machine.py
       - name: Compile model
         run: python -m py_compile model/hybrid_print_machine.py
+      - name: Mint/revaluation invariant
+        run: pytest -q tests/test_hybrid_print_machine.py::test_mint_and_revaluation_do_not_change_hard_nav
+      - name: DEX allocation invariant
+        run: pytest -q tests/test_hybrid_print_machine.py::test_allocating_cash_to_dex_changes_location_not_wealth
+      - name: Classic profit capitalization invariant
+        run: pytest -q tests/test_hybrid_print_machine.py::test_classic_profit_can_capitalize_dex_without_double_counting
+      - name: DEX realized-profit invariant
+        run: pytest -q tests/test_hybrid_print_machine.py::test_dex_profit_retained_in_dex_increases_external_nav_only_by_profit
+      - name: Settlement and flash fail-close invariant
+        run: pytest -q tests/test_hybrid_print_machine.py::test_unsettled_or_unrepaid_route_fails_closed
+      - name: Independent counterparty invariant
+        run: pytest -q tests/test_hybrid_print_machine.py::test_internal_counterparty_cannot_create_realized_profit
+      - name: Compounding identity invariant
+        run: pytest -q tests/test_hybrid_print_machine.py::test_compounding_identity_uses_only_realized_pnl_inputs
+      - name: Full model regression
+        run: pytest -q tests/test_hybrid_print_machine.py
