@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 20
     env:
       MAINNET_RPC_URL: https://ethereum-rpc.publicnode.com
+      BASE_RPC_URL: https://base-rpc.publicnode.com
     steps:
       - uses: actions/checkout@v4
       - name: Install Foundry
@@ -39,6 +40,11 @@ jobs:
         run: |
           set -o pipefail
           forge test -vvv --match-path test/StochasticEconomicFirewall.t.sol 2>&1 | tee stochastic-results.txt
+      - name: V2.2 P5 distribution firewall
+        if: github.ref_name == 'aicb-v2-mainnet-fork'
+        run: |
+          set -o pipefail
+          forge test -vvv --match-path test/DistributionFirewallV22.t.sol 2>&1 | tee v22-results.txt
       - name: Upload EVM results
         if: always()
         uses: actions/upload-artifact@v4
@@ -49,3 +55,4 @@ jobs:
             baseline-results.txt
             fork-results.txt
             stochastic-results.txt
+            v22-results.txt
