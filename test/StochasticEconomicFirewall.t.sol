@@ -8,21 +8,35 @@ interface VmStochastic {
 interface IChainlinkStochastic {
     function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80);
 }
+interface IAavePoolStochastic {
+    function FLASHLOAN_PREMIUM_TOTAL() external view returns (uint128);
+}
 
-/// @notice 10k-cycle economic firewall using real latest-mainnet basefee + Chainlink ETH/USD.
-/// @dev Mirrors a fee-paying external CPMM trade followed by a fee-exempt exact AICB reset.
+/// @notice 10k-cycle economic firewall using live Ethereum basefee, Chainlink ETH/USD
+///         and live Aave V3 flash premium from the selected mainnet fork.
+/// @dev External CPMM trades pay 30 bps. AICB exact resets are fee-exempt in the research AMM.
+///      Two gas views are reported:
+///      (1) system-only: external users pay their own trade gas; system pays reset gas;
+///      (2) all-in: system is charged both external-trade + reset gas.
 contract StochasticEconomicFirewallTest {
     VmStochastic constant vm = VmStochastic(address(uint160(uint256(keccak256("hevm cheat code")))));
+
     address constant ETH_USD = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
+    address constant AAVE_POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
 
     uint256 constant BPS = 10_000;
     uint256 constant EXTERNAL_FEE_BPS = 30;
     uint256 constant REINVEST_BPS = 5_132;
     uint256 constant MEV_BPS = 5;
+    uint256 constant UNI_ROUNDTRIP_FEE_BPS = 2; // USDC->USDT->USDC on the real 1-bp V3 pool
     uint256 constant CYCLES = 10_000;
     uint256 constant EPOCH = 100;
     uint256 constant STRESS_SELL_COVERAGE = 1_000;
+
+    // Measured on MainnetForkLatest.t.sol at fork block ~25.928m:
+    // external BUY/SELL ~131-133k, AICB reset ~166-169k.
     uint256 constant RESET_GAS = 170_000;
+    uint256 constant ALL_IN_CYCLE_GAS = 300_000;
     uint256 constant PRIORITY_FEE_WEI = 100_000_000; // 0.1 gwei
 
     event log_named_uint(string key, uint256 val);
@@ -34,11 +48,16 @@ contract StochasticEconomicFirewallTest {
         uint256 lpFinal;
         uint256 grossProfit;
         uint256 reinvested;
-        uint256 gasBaseOnly;
-        uint256 gasWithTip;
+        uint256 gasSystemBase;
+        uint256 gasSystemTip;
+        uint256 gasAllInBase;
+        uint256 gasAllInTip;
         uint256 mevHaircut;
-        int256 netBaseOnly;
-        int256 netWithTip;
+        uint256 flashAndV3Friction;
+        int256 netSystemBase;
+        int256 netSystemTip;
+        int256 netAllInBase;
+        int256 netAllInTip;
         bool solvent;
     }
 
@@ -51,37 +70,81 @@ contract StochasticEconomicFirewallTest {
         bool solvent;
     }
 
-    function testTenThousandRandom005With5132SolvencyWaterfall() external {
+    function testTenThousandRandom005With5132StrictFirewall() external {
         _fork();
         uint256 ethUsd8 = _ethUsd8();
-        Result memory r = _simulate(keccak256("SYNERGY-AICB-V2-SEED-42"), 50_000, true, ethUsd8);
+        uint256 premiumBps = IAavePoolStochastic(AAVE_POOL).FLASHLOAN_PREMIUM_TOTAL();
+        Result memory r = _simulate(keccak256("SYNERGY-AICB-V2-SEED-42"), 1, true, ethUsd8, premiumBps);
         require(r.solvent, "AICB reserve insolvency");
-        require(r.netBaseOnly < 0, "$0.05 unexpectedly passes basefee-only firewall");
-        require(r.netWithTip < r.netBaseOnly, "priority fee accounting");
-        _logs(r, ethUsd8);
+        require(r.netSystemBase < 0, "$0.05 unexpectedly passes system-only basefee firewall");
+        require(r.netAllInBase < r.netSystemBase, "all-in gas must be worse");
+        require(r.netSystemTip < r.netSystemBase, "priority fee accounting");
+        _logs(r, ethUsd8, premiumBps, 1);
     }
 
-    function testTenThousandRandom005OptimisticNoReinvestStillFails() external {
+    function testTenThousandRandom005OptimisticNoReinvestStillFailsStrict() external {
         _fork();
         uint256 ethUsd8 = _ethUsd8();
-        Result memory r = _simulate(keccak256("SYNERGY-AICB-V2-UPPER-BOUND"), 50_000, false, ethUsd8);
+        uint256 premiumBps = IAavePoolStochastic(AAVE_POOL).FLASHLOAN_PREMIUM_TOTAL();
+        Result memory r = _simulate(keccak256("SYNERGY-AICB-V2-UPPER-BOUND"), 1, false, ethUsd8, premiumBps);
         require(r.solvent, "upper-bound reserve insolvency");
-        require(r.netBaseOnly < 0, "optimistic $0.05 upper bound unexpectedly passes");
-        _logs(r, ethUsd8);
+        require(r.netSystemBase < 0, "optimistic $0.05 upper bound unexpectedly passes");
+        _logs(r, ethUsd8, premiumBps, 1);
     }
 
-    function _simulate(bytes32 seed, uint256 trade, bool reinvest, uint256 ethUsd8)
+    /// @notice Finds first integer scale where the same relative model becomes net positive.
+    /// scale=1 means initial HardUSDT=0.604160 and trade=0.05 USDT.
+    function testScaleSweepFindsBreakEven() external {
+        _fork();
+        uint256 ethUsd8 = _ethUsd8();
+        uint256 premiumBps = IAavePoolStochastic(AAVE_POOL).FLASHLOAN_PREMIUM_TOTAL();
+
+        uint256 firstSystemBase;
+        uint256 firstSystemTip;
+        uint256 firstAllInBase;
+        uint256 firstAllInTip;
+
+        for (uint256 scale = 1; scale <= 64; ++scale) {
+            Result memory r = _simulate(keccak256("SYNERGY-AICB-V2-SCALE"), scale, true, ethUsd8, premiumBps);
+            require(r.solvent, "scale sweep insolvency");
+            if (firstSystemBase == 0 && r.netSystemBase > 0) firstSystemBase = scale;
+            if (firstSystemTip == 0 && r.netSystemTip > 0) firstSystemTip = scale;
+            if (firstAllInBase == 0 && r.netAllInBase > 0) firstAllInBase = scale;
+            if (firstAllInTip == 0 && r.netAllInTip > 0) firstAllInTip = scale;
+            if (firstSystemBase != 0 && firstSystemTip != 0 && firstAllInBase != 0 && firstAllInTip != 0) break;
+        }
+
+        require(firstSystemBase != 0 && firstSystemTip != 0 && firstAllInBase != 0 && firstAllInTip != 0, "no break-even <=64x");
+        require(firstSystemBase <= firstAllInBase, "gas ownership ordering");
+        require(firstSystemTip <= firstAllInTip, "tip gas ownership ordering");
+
+        emit log_named_uint("break-even scale system/base", firstSystemBase);
+        emit log_named_uint("break-even trade microUSDT system/base", 50_000 * firstSystemBase);
+        emit log_named_uint("break-even initial hard microUSDT system/base", 604_160 * firstSystemBase);
+        emit log_named_uint("break-even scale system/+0.1gwei", firstSystemTip);
+        emit log_named_uint("break-even trade microUSDT system/+0.1gwei", 50_000 * firstSystemTip);
+        emit log_named_uint("break-even initial hard microUSDT system/+0.1gwei", 604_160 * firstSystemTip);
+        emit log_named_uint("break-even scale all-in/base", firstAllInBase);
+        emit log_named_uint("break-even trade microUSDT all-in/base", 50_000 * firstAllInBase);
+        emit log_named_uint("break-even initial hard microUSDT all-in/base", 604_160 * firstAllInBase);
+        emit log_named_uint("break-even scale all-in/+0.1gwei", firstAllInTip);
+        emit log_named_uint("break-even trade microUSDT all-in/+0.1gwei", 50_000 * firstAllInTip);
+        emit log_named_uint("break-even initial hard microUSDT all-in/+0.1gwei", 604_160 * firstAllInTip);
+    }
+
+    function _simulate(bytes32 seed, uint256 scale, bool reinvest, uint256 ethUsd8, uint256 premiumBps)
         internal view returns (Result memory r)
     {
+        uint256 trade = 50_000 * scale;
         SimState memory s = SimState({
-            l0: 50_000,
-            l1: 50_000,
-            reserve: 504_160,
-            epochStartReserve: 504_160,
+            l0: 50_000 * scale,
+            l1: 50_000 * scale,
+            reserve: 504_160 * scale,
+            epochStartReserve: 504_160 * scale,
             reinvested: 0,
             solvent: true
         });
-        uint256 hardStart = 604_160;
+        uint256 hardStart = 604_160 * scale;
 
         for (uint256 i; i < CYCLES; ++i) {
             if (!_advance(s, seed, i, trade)) {
@@ -97,11 +160,21 @@ contract StochasticEconomicFirewallTest {
         r.hardFinal = s.reserve + r.lpFinal;
         r.grossProfit = r.hardFinal > hardStart ? r.hardFinal - hardStart : 0;
         r.reinvested = s.reinvested;
-        r.mevHaircut = CYCLES * trade * MEV_BPS / BPS;
-        r.gasBaseOnly = _gasMicroUsd(CYCLES * RESET_GAS, block.basefee, ethUsd8);
-        r.gasWithTip = _gasMicroUsd(CYCLES * RESET_GAS, block.basefee + PRIORITY_FEE_WEI, ethUsd8);
-        r.netBaseOnly = int256(r.hardFinal) - int256(hardStart) - int256(r.gasBaseOnly) - int256(r.mevHaircut);
-        r.netWithTip = int256(r.hardFinal) - int256(hardStart) - int256(r.gasWithTip) - int256(r.mevHaircut);
+
+        uint256 notional = CYCLES * trade;
+        r.mevHaircut = notional * MEV_BPS / BPS;
+        r.flashAndV3Friction = notional * (premiumBps + UNI_ROUNDTRIP_FEE_BPS) / BPS;
+
+        r.gasSystemBase = _gasMicroUsd(CYCLES * RESET_GAS, block.basefee, ethUsd8);
+        r.gasSystemTip = _gasMicroUsd(CYCLES * RESET_GAS, block.basefee + PRIORITY_FEE_WEI, ethUsd8);
+        r.gasAllInBase = _gasMicroUsd(CYCLES * ALL_IN_CYCLE_GAS, block.basefee, ethUsd8);
+        r.gasAllInTip = _gasMicroUsd(CYCLES * ALL_IN_CYCLE_GAS, block.basefee + PRIORITY_FEE_WEI, ethUsd8);
+
+        int256 grossNetFriction = int256(r.grossProfit) - int256(r.mevHaircut) - int256(r.flashAndV3Friction);
+        r.netSystemBase = grossNetFriction - int256(r.gasSystemBase);
+        r.netSystemTip = grossNetFriction - int256(r.gasSystemTip);
+        r.netAllInBase = grossNetFriction - int256(r.gasAllInBase);
+        r.netAllInTip = grossNetFriction - int256(r.gasAllInTip);
     }
 
     function _advance(SimState memory s, bytes32 seed, uint256 i, uint256 trade) internal pure returns (bool) {
@@ -189,19 +262,26 @@ contract StochasticEconomicFirewallTest {
         vm.createSelectFork(rpc);
     }
 
-    function _logs(Result memory r, uint256 ethUsd8) internal {
+    function _logs(Result memory r, uint256 ethUsd8, uint256 premiumBps, uint256 scale) internal {
         emit log_named_uint("stochastic fork block", block.number);
+        emit log_named_uint("scale", scale);
         emit log_named_uint("basefee wei", block.basefee);
         emit log_named_uint("ETH/USD 8 decimals", ethUsd8);
+        emit log_named_uint("Aave flash premium bps", premiumBps);
         emit log_named_uint("hard final microUSDT", r.hardFinal);
         emit log_named_uint("AICB reserve final microUSDT", r.reserveFinal);
         emit log_named_uint("LP hard final microUSDT", r.lpFinal);
         emit log_named_uint("gross hard profit microUSDT", r.grossProfit);
         emit log_named_uint("explicit reinvest microUSDT", r.reinvested);
-        emit log_named_uint("gas base-only microUSD", r.gasBaseOnly);
-        emit log_named_uint("gas +0.1gwei tip microUSD", r.gasWithTip);
         emit log_named_uint("MEV 5bps microUSD", r.mevHaircut);
-        emit log_named_int("NET base-only microUSD", r.netBaseOnly);
-        emit log_named_int("NET +0.1gwei tip microUSD", r.netWithTip);
+        emit log_named_uint("Aave + V3 roundtrip friction microUSD", r.flashAndV3Friction);
+        emit log_named_uint("system gas base-only microUSD", r.gasSystemBase);
+        emit log_named_uint("system gas +0.1gwei microUSD", r.gasSystemTip);
+        emit log_named_uint("all-in gas base-only microUSD", r.gasAllInBase);
+        emit log_named_uint("all-in gas +0.1gwei microUSD", r.gasAllInTip);
+        emit log_named_int("NET system/base microUSD", r.netSystemBase);
+        emit log_named_int("NET system/+0.1gwei microUSD", r.netSystemTip);
+        emit log_named_int("NET all-in/base microUSD", r.netAllInBase);
+        emit log_named_int("NET all-in/+0.1gwei microUSD", r.netAllInTip);
     }
 }
