@@ -26,11 +26,11 @@ interface ISwapRouter02 {
 contract AaveUniV3FlashProbe {
     using SafeToken for address;
 
-    address public constant USDC = 0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48;
+    address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address public constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
     address public constant AAVE_POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
     address public constant SWAP_ROUTER_02 = 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45;
-    uint24 public constant STABLE_FEE = 100; // 0.01%
+    uint24 public constant STABLE_FEE = 100;
 
     address public owner;
     uint256 public lastPremium;
@@ -57,35 +57,16 @@ contract AaveUniV3FlashProbe {
     {
         if (msg.sender != AAVE_POOL || initiator != address(this) || asset != USDC) revert BadCallback();
         lastPremium = premium;
-
         USDC.forceApprove(SWAP_ROUTER_02, amount);
         uint256 usdtOut = ISwapRouter02(SWAP_ROUTER_02).exactInputSingle(
-            ISwapRouter02.ExactInputSingleParams({
-                tokenIn: USDC,
-                tokenOut: USDT,
-                fee: STABLE_FEE,
-                recipient: address(this),
-                amountIn: amount,
-                amountOutMinimum: 0,
-                sqrtPriceLimitX96: 0
-            })
+            ISwapRouter02.ExactInputSingleParams({tokenIn: USDC, tokenOut: USDT, fee: STABLE_FEE, recipient: address(this), amountIn: amount, amountOutMinimum: 0, sqrtPriceLimitX96: 0})
         );
         lastUsdtOut = usdtOut;
-
         USDT.forceApprove(SWAP_ROUTER_02, usdtOut);
         uint256 usdcBack = ISwapRouter02(SWAP_ROUTER_02).exactInputSingle(
-            ISwapRouter02.ExactInputSingleParams({
-                tokenIn: USDT,
-                tokenOut: USDC,
-                fee: STABLE_FEE,
-                recipient: address(this),
-                amountIn: usdtOut,
-                amountOutMinimum: 0,
-                sqrtPriceLimitX96: 0
-            })
+            ISwapRouter02.ExactInputSingleParams({tokenIn: USDT, tokenOut: USDC, fee: STABLE_FEE, recipient: address(this), amountIn: usdtOut, amountOutMinimum: 0, sqrtPriceLimitX96: 0})
         );
         lastUsdcBack = usdcBack;
-
         USDC.forceApprove(AAVE_POOL, amount + premium);
         return true;
     }
