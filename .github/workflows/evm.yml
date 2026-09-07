@@ -25,10 +25,15 @@ jobs:
         run: |
           set -o pipefail
           forge build --sizes 2>&1 | tee build-results.txt
-      - name: EVM tests
+      - name: Baseline EVM tests
         run: |
           set -o pipefail
-          forge test -vvv 2>&1 | tee evm-results.txt
+          forge test -vvv --match-path test/AICBSystem.t.sol 2>&1 | tee baseline-results.txt
+      - name: Mainnet latest fork tests
+        if: github.ref_name == 'aicb-v2-mainnet-fork'
+        run: |
+          set -o pipefail
+          forge test -vvv --match-path test/MainnetForkLatest.t.sol 2>&1 | tee fork-results.txt
       - name: Upload EVM results
         if: always()
         uses: actions/upload-artifact@v4
@@ -36,4 +41,5 @@ jobs:
           name: evm-results-${{ github.run_number }}
           path: |
             build-results.txt
-            evm-results.txt
+            baseline-results.txt
+            fork-results.txt
