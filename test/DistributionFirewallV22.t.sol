@@ -19,6 +19,10 @@ interface IBaseGasPriceOracleV22 {
     function getOperatorFee(uint256 gasUsed) external view returns (uint256);
 }
 
+/// @notice V2.2 P5 distribution firewall.
+/// @dev Each SELL-bias runs in an independent EVM test so 64 seeds x 10k cycles
+///      do not share one giant memory/gas arena. Balanced and 55/45 are strict
+///      pass/fail regimes; 60/40 and 70/30 are stress-characterization regimes.
 contract DistributionFirewallV22Test {
     VmV22 constant vm = VmV22(address(uint160(uint256(keccak256("hevm cheat code")))));
 
@@ -33,12 +37,13 @@ contract DistributionFirewallV22Test {
     uint256 constant EPOCH = 100;
     uint256 constant STRESS_SELL_COVERAGE = 1_000;
     uint256 constant SEEDS = 64;
-    uint256 constant TRADE = 50_000;
-    uint256 constant HARD_START = 604_160;
+    uint256 constant TRADE = 50_000; // $0.05 in micro-USDT
+    uint256 constant HARD_START = 604_160; // $0.604160
     uint256 constant RESERVE_START = 504_160;
     uint256 constant LP_SIDE_START = 50_000;
     uint256 constant V3_ROUNDTRIP_BPS = 2;
 
+    // Anchored to V2.1 measured reset/all-in gas at batch=1.
     uint256 constant BATCH_OVERHEAD_GAS = 50_000;
     uint256 constant SYSTEM_EVENT_GAS = 120_000;
     uint256 constant ALLIN_EVENT_GAS = 250_000;
@@ -81,38 +86,44 @@ contract DistributionFirewallV22Test {
         uint256[4] opAllInPerBatch;
     }
 
-    function testV22P5DistributionFirewall() external {
+    function testV22Bias5000() external { _runBias(5_000, true); }
+    function testV22Bias5500() external { _runBias(5_500, true); }
+    function testV22Bias6000() external { _runBias(6_000, false); }
+    function testV22Bias7000() external { _runBias(7_000, false); }
+
+    function _runBias(uint256 sellBps, bool requireRobustBase) internal {
         (uint256 ethBasefee, uint256 ethUsd8, uint256 premiumBps) = _ethereumMetrics();
         BaseFees memory bf = _baseMetrics();
 
         emit log_named_uint("V22 seeds", SEEDS);
         emit log_named_uint("V22 cycles per seed", CYCLES);
+        emit log_named_uint("SELL bias bps", sellBps);
         emit log_named_uint("ETH basefee wei", ethBasefee);
         emit log_named_uint("Base basefee wei", bf.basefee);
         emit log_named_uint("ETH/USD 8 decimals", ethUsd8);
         emit log_named_uint("Aave flash premium bps", premiumBps);
 
-        uint256 robustBaseBiases;
-        for (uint256 i; i < 4; ++i) {
-            uint256 sellBps = _biasAt(i);
-            Distribution memory d = _distribution(sellBps);
-            _logDistribution(sellBps, d);
+        Distribution memory d = _distribution(sellBps);
+        _logDistribution(sellBps, d);
 
-            uint256 insolvencyCutoff = (SEEDS * 5 + 99) / 100;
-            if (d.insolvencies >= insolvencyCutoff || d.p5Gross == 0) {
-                emit log_named_uint(_label("P5 insolvency/no-scale SELL bps ", sellBps), 1);
-                continue;
-            }
-
-            Core memory c = Core(d.p5Gross, premiumBps, ethUsd8);
-            Frontier memory ethF = _ethFrontier(c, ethBasefee);
-            Frontier memory baseF = _baseFrontier(c, bf);
-            _logFrontier("ETH", sellBps, ethF);
-            _logFrontier("BASE", sellBps, baseF);
-            if (baseF.worstSystem != 0) robustBaseBiases++;
+        uint256 insolvencyCutoff = (SEEDS * 5 + 99) / 100; // ceil(5% * 64) = 4
+        if (d.insolvencies >= insolvencyCutoff || d.p5Gross == 0) {
+            emit log_named_uint(_label("P5 solvency FAIL SELL bps ", sellBps), 1);
+            if (requireRobustBase) revert("V2.2 strict bias failed P5 solvency");
+            return;
         }
 
-        require(robustBaseBiases >= 2, "V2.2: fewer than two robust Base bias regimes");
+        Core memory c = Core(d.p5Gross, premiumBps, ethUsd8);
+        Frontier memory ethF = _ethFrontier(c, ethBasefee);
+        Frontier memory baseF = _baseFrontier(c, bf);
+        _logFrontier("ETH", sellBps, ethF);
+        _logFrontier("BASE", sellBps, baseF);
+
+        emit log_named_uint(_label("BASE robust all-grid system PASS SELL bps ", sellBps), baseF.worstSystem != 0 ? 1 : 0);
+        if (requireRobustBase) {
+            require(baseF.worstSystem != 0, "V2.2 Base P5 fails some system grid cells");
+            require(baseF.defaultSystem != 0, "V2.2 Base default P5 not positive at any scale");
+        }
     }
 
     function _distribution(uint256 sellBps) internal pure returns (Distribution memory d) {
@@ -176,6 +187,8 @@ contract DistributionFirewallV22Test {
     function _ethFrontier(Core memory c, uint256 basefee) internal pure returns (Frontier memory f) {
         f.bestSystem = type(uint256).max;
         f.bestAllIn = type(uint256).max;
+        f.worstSystem = 1;
+        f.worstAllIn = 1;
         for (uint256 bi; bi < 4; ++bi) f = _ethBatch(f, c, basefee, bi);
         if (f.bestSystem == type(uint256).max) f.bestSystem = 0;
         if (f.bestAllIn == type(uint256).max) f.bestAllIn = 0;
@@ -188,10 +201,11 @@ contract DistributionFirewallV22Test {
         uint256 sysUnits = _totalGasUnits(batch, SYSTEM_EVENT_GAS);
         uint256 allUnits = _totalGasUnits(batch, ALLIN_EVENT_GAS);
         for (uint256 gi; gi < 3; ++gi) {
-            uint256 gp = basefee * _gasMultAt(gi);
+            uint256 gm = _gasMultAt(gi);
+            uint256 gp = basefee * gm;
             uint256 sysFixed = _weiToMicroUsd(sysUnits * gp, c.ethUsd8);
             uint256 allFixed = _weiToMicroUsd(allUnits * gp, c.ethUsd8);
-            f = _mevSweep(f, c, sysFixed, allFixed, batch, _gasMultAt(gi));
+            f = _mevSweep(f, c, sysFixed, allFixed, batch, gm);
         }
         return f;
     }
@@ -199,6 +213,8 @@ contract DistributionFirewallV22Test {
     function _baseFrontier(Core memory c, BaseFees memory bf) internal pure returns (Frontier memory f) {
         f.bestSystem = type(uint256).max;
         f.bestAllIn = type(uint256).max;
+        f.worstSystem = 1;
+        f.worstAllIn = 1;
         for (uint256 bi; bi < 4; ++bi) f = _baseBatch(f, c, bf, bi);
         if (f.bestSystem == type(uint256).max) f.bestSystem = 0;
         if (f.bestAllIn == type(uint256).max) f.bestAllIn = 0;
@@ -212,12 +228,13 @@ contract DistributionFirewallV22Test {
         uint256 sysUnits = _totalGasUnits(batch, SYSTEM_EVENT_GAS);
         uint256 allUnits = _totalGasUnits(batch, ALLIN_EVENT_GAS);
         for (uint256 gi; gi < 3; ++gi) {
-            uint256 gp = bf.basefee * _gasMultAt(gi);
+            uint256 gm = _gasMultAt(gi);
+            uint256 gp = bf.basefee * gm;
             uint256 sysWei = sysUnits * gp + nBatches * (bf.l1PerBatch[bi] + bf.opSystemPerBatch[bi]);
             uint256 allWei = allUnits * gp + nBatches * (bf.l1PerBatch[bi] + bf.opAllInPerBatch[bi]);
             uint256 sysFixed = _weiToMicroUsd(sysWei, c.ethUsd8);
             uint256 allFixed = _weiToMicroUsd(allWei, c.ethUsd8);
-            f = _mevSweep(f, c, sysFixed, allFixed, batch, _gasMultAt(gi));
+            f = _mevSweep(f, c, sysFixed, allFixed, batch, gm);
         }
         return f;
     }
@@ -363,18 +380,13 @@ contract DistributionFirewallV22Test {
         return 50;
     }
 
-    function _biasAt(uint256 i) internal pure returns (uint256) {
-        if (i == 0) return 5_000;
-        if (i == 1) return 5_500;
-        if (i == 2) return 6_000;
-        return 7_000;
-    }
-
     function _minScale(uint256 a, uint256 b) internal pure returns (uint256) {
         if (b == 0) return a;
         return b < a ? b : a;
     }
 
+    /// @dev Frontier starts at 1. A zero candidate means an impossible grid cell
+    ///      (proportional friction >= P5 gross), and poisons the robust worst-case.
     function _maxScale(uint256 a, uint256 b) internal pure returns (uint256) {
         if (a == 0 || b == 0) return 0;
         return b > a ? b : a;
