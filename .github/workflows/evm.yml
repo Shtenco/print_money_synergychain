@@ -34,6 +34,11 @@ jobs:
         run: |
           set -o pipefail
           forge test -vvv --match-path test/MainnetForkLatest.t.sol 2>&1 | tee fork-results.txt
+      - name: 10k stochastic economic firewall
+        if: github.ref_name == 'aicb-v2-mainnet-fork'
+        run: |
+          set -o pipefail
+          forge test -vvv --match-path test/StochasticEconomicFirewall.t.sol 2>&1 | tee stochastic-results.txt
       - name: Upload EVM results
         if: always()
         uses: actions/upload-artifact@v4
@@ -43,3 +48,4 @@ jobs:
             build-results.txt
             baseline-results.txt
             fork-results.txt
+            stochastic-results.txt
