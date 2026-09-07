@@ -46,7 +46,6 @@ contract AICBControllerV2 {
 
     modifier onlyOwner() { if (msg.sender != owner) revert Unauthorized(); _; }
 
-    /// @notice Deposit genuine external USDT. lpBps may be zero for reserve-first bootstrap.
     function depositExternalCapital(uint256 amount, uint256 lpBps) external onlyOwner {
         if (lpBps > BPS) revert InvalidBps();
         usdt.safeTransferFrom(msg.sender, address(this), amount);
@@ -137,10 +136,10 @@ contract AICBControllerV2 {
     function resetQuoteCost(Fixed5050CPMM6 pool, uint256 baseSell) external view returns (uint256) {
         uint256 x = pool.reserveBase();
         uint256 y = pool.reserveQuote();
-        uint256 quoteOut = pool.amountOut(baseSell, x, y);
+        uint256 quoteOut = pool.amountOut(baseSell, x, y); // external seller pays normal fee
         uint256 x1 = x + baseSell;
         uint256 y1 = y - quoteOut;
-        return _bestInput(pool, y1, x1);
+        return _bestInput(pool, y1, x1); // AICB reset is fee-exempt
     }
 
     function _addHardLiquidity(Fixed5050CPMM6 pool, ResearchToken6 baseToken, uint256 q) internal {
@@ -151,11 +150,10 @@ contract AICBControllerV2 {
         pool.addLiquidity(q, q);
     }
 
-    /// @dev Input reserve rin is the smaller side; rout is the larger side. Finds fee-aware input that minimizes parity error.
     function _bestInput(Fixed5050CPMM6 pool, uint256 rin, uint256 rout) internal view returns (uint256) {
         if (rout <= rin) return 0;
         uint256 m = BPS;
-        uint256 c = BPS - pool.feeBps();
+        uint256 c = BPS - pool.effectiveFeeBps(address(this));
         uint256 b = (m + c) * rin;
         uint256 disc = b * b + 4 * c * m * rin * (rout - rin);
         uint256 root = _sqrt(disc);
@@ -167,7 +165,7 @@ contract AICBControllerV2 {
     }
 
     function _parityError(Fixed5050CPMM6 pool, uint256 rin, uint256 rout, uint256 a) internal view returns (uint256) {
-        uint256 out = pool.amountOut(a, rin, rout);
+        uint256 out = pool.amountOutFor(address(this), a, rin, rout);
         uint256 lhs = rin + a;
         uint256 rhs = rout - out;
         return lhs >= rhs ? lhs - rhs : rhs - lhs;
