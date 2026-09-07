@@ -4,11 +4,15 @@ on:
   push:
     branches:
       - aicb-v1-exact-reset
+      - aicb-v2-mainnet-fork
   workflow_dispatch:
 
 jobs:
   forge:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MAINNET_RPC_URL: https://ethereum-rpc.publicnode.com
     steps:
       - uses: actions/checkout@v4
       - name: Install Foundry
@@ -20,4 +24,12 @@ jobs:
       - name: Build
         run: forge build --sizes
       - name: EVM tests
-        run: forge test -vvv
+        run: |
+          set -o pipefail
+          forge test -vvv 2>&1 | tee evm-results.txt
+      - name: Upload EVM results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evm-results-${{ github.run_number }}
+          path: evm-results.txt
