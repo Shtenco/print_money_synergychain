@@ -31,7 +31,7 @@ contract MainnetForkEconomicFirewallTest {
 
     VmV2 constant vm = VmV2(address(uint160(uint256(keccak256("hevm cheat code")))));
 
-    address constant USDC = 0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48;
+    address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
     address constant UNI_USDC_USDT_001 = 0x3416cF6C708Da44DB2624D63ea0AAef7113527C6;
     address constant AAVE_POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
@@ -152,8 +152,6 @@ contract MainnetForkEconomicFirewallTest {
         address(s.synr).forceApprove(address(s.c), 50_000);
         s.c.addLiquidity(50_000, 50_000);
 
-        // 0.100000 initial AICB asset + 0.404160 realized external arb profit.
-        // V2 keeps it in-system but reserve-first; adaptive LP reinvest starts only above solvency coverage.
         USDT.forceApprove(address(s.cb), 504_160);
         s.cb.depositExternalCapital(504_160, 0);
     }
