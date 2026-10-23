@@ -1,10 +1,10 @@
-# 🏦 Print Money SYNERGYCHAIN — verified research dossier
+#  Print Money SYNERGYCHAIN — verified research dossier
 
-> **Статус:** 🔬 R&D / documentation-only на текущем `main`.
+> **Статус:**  R&D / documentation-only на текущем `main`.
 > **Предмет:** программируемая ликвидность, эмиссия, mint/burn, bridge/AMM и отделение внутренней переоценки от внешнего экономического результата.
 > **Проверено по фактическому дереву `main`:** 29.09.2026.
 
-## 1. 🎯 Главный исследовательский вопрос
+## 1.  Главный исследовательский вопрос
 
 Можно ли использовать внутреннюю денежную топологию, AMM, mint/burn, protocol-owned liquidity и bridge-механизмы как средство оборота и перераспределения капитала так, чтобы **реальный экономический результат** оставался измеримым и не подменялся ростом внутренних номиналов?
 
@@ -17,7 +17,7 @@ eq
 	ext{External economic profit}
 ]
 
-## 2. 📦 Фактическое состояние `main`
+## 2.  Фактическое состояние `main`
 
 На момент аудита репозиторий содержит только:
 
@@ -30,7 +30,7 @@ Runtime, simulator, contracts, tests, CI, datasets или evidence artifacts в 
 
 Поэтому весь описанный ниже engine — **исследовательская спецификация**, а не существующая production-система.
 
-## 3. 🧠 Базовая модель
+## 3.  Базовая модель
 
 Полезно разделять минимум пять слоёв:
 
@@ -54,7 +54,7 @@ HardNAV = InternalTokenPrice 	imes InternalSupply
 
 если этот mark нельзя реализовать против внешнего спроса без разрушения цены.
 
-## 4. 🛡️ Экономический firewall
+## 4.  Экономический firewall
 
 ```text
 mint                    != profit
@@ -71,25 +71,25 @@ accounting entry        != cash inflow
 
 Любое утверждение о прибыли должно в конечном счёте быть сведено к внешнему source/sink.
 
-## 5. 🏗️ Целевая архитектура
+## 5.  Целевая архитектура
 
 ```mermaid
 flowchart LR
-    EXT[🌍 External market / investor / customer] --> CASH[💵 External cash]
-    CASH --> TREAS[🏦 Treasury]
-    TREAS --> POOL[💧 Protocol liquidity]
-    POOL --> AMM[🔄 AMM / routing]
-    AMM --> EXT2[🌍 External counterparty]
-    AMM --> INT[🪙 Internal tokens]
-    INT --> BURN[🔥 Burn / rebalance]
-    EXT2 --> SETTLE[✅ External settlement]
-    SETTLE --> LEDGER[📚 Double-entry accounting]
-    LEDGER --> NAV[💰 HardNAV]
+    EXT[ External market / investor / customer] --> CASH[ External cash]
+    CASH --> TREAS[ Treasury]
+    TREAS --> POOL[ Protocol liquidity]
+    POOL --> AMM[ AMM / routing]
+    AMM --> EXT2[ External counterparty]
+    AMM --> INT[ Internal tokens]
+    INT --> BURN[ Burn / rebalance]
+    EXT2 --> SETTLE[ External settlement]
+    SETTLE --> LEDGER[ Double-entry accounting]
+    LEDGER --> NAV[ HardNAV]
 ```
 
 Mint/burn может менять внутренний supply, но в HardNAV попадает только подтверждённое внешнее economic effect.
 
-## 6. 📥 Планируемые inputs
+## 6.  Планируемые inputs
 
 - external cash inflow;
 - pool reserves;
@@ -103,7 +103,7 @@ Mint/burn может менять внутренний supply, но в HardNAV �
 - repayment/settlement receipts;
 - accounting policy version.
 
-## 7. 📤 Планируемые outputs
+## 7.  Планируемые outputs
 
 - `DeltaHardNAV`;
 - `DeltaExternalCash`;
@@ -118,7 +118,7 @@ Mint/burn может менять внутренний supply, но в HardNAV �
 - execution costs;
 - reconciliation report.
 
-## 8. 📊 Обязательные метрики
+## 8.  Обязательные метрики
 
 ### HardNAV delta
 
@@ -152,7 +152,7 @@ RealizedEdge =
 ExternalReceipts - ExternalCosts - Fees - Gas - Slippage
 ]
 
-## 9. 🧪 Обязательная simulation discipline
+## 9.  Обязательная simulation discipline
 
 Будущий simulator должен разделять:
 
@@ -178,7 +178,7 @@ historical replay
 - all liabilities;
 - final reconciliation.
 
-## 10. ⚠️ Failure modes
+## 10.  Failure modes
 
 | Failure | Ложный вывод |
 |---|---|
@@ -191,7 +191,7 @@ historical replay
 | unrealizable mark-to-market | phantom NAV |
 | omitted gas/slippage | inflated strategy edge |
 
-## 11. 🧪 Required tests будущей реализации
+## 11.  Required tests будущей реализации
 
 - conservation of external assets/liabilities;
 - no double-count of bridge mirrors;
@@ -207,7 +207,7 @@ historical replay
 - bridge outage;
 - partial settlement failure.
 
-## 12. 🛠️ Воспроизводимость текущего состояния
+## 12.  Воспроизводимость текущего состояния
 
 Сейчас воспроизводить simulator нечего: его нет в `main`.
 
@@ -223,22 +223,22 @@ find . -maxdepth 2 -type f
 
 Это важная часть честного статуса: подробная теория **не считается реализацией**.
 
-## 13. 🗺️ Карта репозитория
+## 13.  Карта репозитория
 
 | Компонент | Статус |
 |---|---|
-| research specification | ✅ |
-| economic invariants | ✅ |
-| runtime simulator | ❌ |
-| AMM engine | ❌ |
-| bridge model | ❌ |
-| double-entry ledger | ❌ |
-| historical data | ❌ |
-| unit/property tests | ❌ |
-| observed evidence | ❌ |
-| production deployment | ❌ |
+| research specification |  |
+| economic invariants |  |
+| runtime simulator |  |
+| AMM engine |  |
+| bridge model |  |
+| double-entry ledger |  |
+| historical data |  |
+| unit/property tests |  |
+| observed evidence |  |
+| production deployment |  |
 
-## 14. 🔗 Место в SYNERGY
+## 14.  Место в SYNERGY
 
 - [`synergy_graph_print_money`](https://github.com/Shtenco/synergy_graph_print_money) — graph/topology monetary R&D;
 - [`synergy_qe`](https://github.com/Shtenco/synergy_qe) — issuance/QE experiments;
@@ -246,7 +246,7 @@ find . -maxdepth 2 -type f
 - [`synergy_usds`](https://github.com/Shtenco/synergy_usds) — stable-value monetary surface;
 - [`synergy_financial_os`](https://github.com/Shtenco/synergy_financial_os) — canonical accounting/NAV authority.
 
-## 15. 🚀 Roadmap
+## 15.  Roadmap
 
 1. создать deterministic double-entry simulator;
 2. реализовать x·y=k pools и ownership accounting;
@@ -260,7 +260,7 @@ find . -maxdepth 2 -type f
 10. сверять каждый positive result через consolidated HardNAV;
 11. только после этого разрешать performance claims.
 
-## 16. 🛑 Что проект НЕ утверждает
+## 16.  Что проект НЕ утверждает
 
 - что «печать денег» создаёт бесплатное внешнее богатство;
 - что mint/burn сам по себе прибыль;
@@ -270,21 +270,21 @@ find . -maxdepth 2 -type f
 - что есть доказанная безынфляционная эмиссия;
 - что есть гарантированный положительный HardNAV.
 
-## 17. 📊 Текущий статус
+## 17.  Текущий статус
 
 ```text
-Theory / invariants        ✅
-Repository audit           ✅
-Executable model           ❌
-Tests                      ❌
-Historical replay          ❌
-OOS                        ❌
-Observed evidence          ❌
-Production                 ❌
+Theory / invariants        
+Repository audit           
+Executable model           
+Tests                      
+Historical replay          
+OOS                        
+Observed evidence          
+Production                 
 ```
 
-**Итог:** 🔬 R&D. README теперь является подробной исследовательской спецификацией, но не маскирует отсутствие runtime.
+**Итог:**  R&D. README теперь является подробной исследовательской спецификацией, но не маскирует отсутствие runtime.
 
 ---
 
-[🧭 SYNERGY SYSTEM](https://github.com/Shtenco/synergy_system) · [📚 Атлас 75 репозиториев](https://github.com/Shtenco/synergy_system/blob/main/docs/SYNERGY_REPOSITORY_ATLAS.md) · [🧾 Registry](https://github.com/Shtenco/synergy_system/blob/main/registry/SYNERGY_REPOSITORIES.json)
+[ SYNERGY SYSTEM](https://github.com/Shtenco/synergy_system) · [ Атлас 75 репозиториев](https://github.com/Shtenco/synergy_system/blob/main/docs/SYNERGY_REPOSITORY_ATLAS.md) · [ Registry](https://github.com/Shtenco/synergy_system/blob/main/registry/SYNERGY_REPOSITORIES.json)
